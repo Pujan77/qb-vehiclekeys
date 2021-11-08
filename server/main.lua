@@ -1,11 +1,6 @@
+QBCore = exports['qb-core']:GetCoreObject()
+
 local VehicleList = {}
-
-QBCore.Functions.CreateCallback('vehiclekeys:CheckOwnership', function(source, cb, plate)
-    local check = VehicleList[plate]
-    local retval = check ~= nil
-
-    cb(retval)
-end)
 
 QBCore.Functions.CreateCallback('vehiclekeys:CheckHasKey', function(source, cb, plate)
     local Player = QBCore.Functions.GetPlayer(source)
@@ -14,32 +9,30 @@ end)
 
 RegisterServerEvent('vehiclekeys:server:SetVehicleOwner')
 AddEventHandler('vehiclekeys:server:SetVehicleOwner', function(plate)
-    if plate then
-        local src = source
-        local Player = QBCore.Functions.GetPlayer(src)
-        if VehicleList then
-            -- VehicleList exists so check for a plate
-            local val = VehicleList[plate]
-            if val then
-                -- The plate exists
-                VehicleList[plate].owners[Player.PlayerData.citizenid] = true
-            else
-                -- Plate not currently tracked so store a new one with one owner
-                VehicleList[plate] = {
-                    owners = {}
-                }
-                VehicleList[plate].owners[Player.PlayerData.citizenid] = true
+    local src = source
+    local Player = QBCore.Functions.GetPlayer(src)
+    if VehicleList ~= nil then
+        if DoesPlateExist(plate) then
+            for k, val in pairs(VehicleList) do
+                if val.plate == plate then
+                    table.insert(VehicleList[k].owners, Player.PlayerData.citizenid)
+                end
             end
         else
-            -- Initialize new VehicleList
-            VehicleList = {}
-            VehicleList[plate] = {
-                owners = {}
+            local vehicleId = #VehicleList+1
+            VehicleList[vehicleId] = {
+                plate = plate, 
+                owners = {},
             }
-            VehicleList[plate].owners[Player.PlayerData.citizenid] = true
+            VehicleList[vehicleId].owners[1] = Player.PlayerData.citizenid
         end
     else
-        print('vehiclekeys:server:SetVehicleOwner - plate argument is nil')
+        local vehicleId = #VehicleList+1
+        VehicleList[vehicleId] = {
+            plate = plate, 
+            owners = {},
+        }
+        VehicleList[vehicleId].owners[1] = Player.PlayerData.citizenid
     end
 end)
 
@@ -50,35 +43,50 @@ AddEventHandler('vehiclekeys:server:GiveVehicleKeys', function(plate, target)
     if CheckOwner(plate, Player.PlayerData.citizenid) then
         if QBCore.Functions.GetPlayer(target) ~= nil then
             TriggerClientEvent('vehiclekeys:client:SetOwner', target, plate)
-            TriggerClientEvent('QBCore:Notify', src, "You gave the keys!")
-            TriggerClientEvent('QBCore:Notify', target, "You got the keys!")
+            TriggerClientEvent('QBCore:Notify', src, "You gave your keys!")
+            TriggerClientEvent('QBCore:Notify', target, "You received your keys!")
         else
-            TriggerClientEvent('QBCore:Notify', source,  "Player Not Online", "error")
+            TriggerClientEvent('chatMessage', src, "SYSTEM", "error", "Player is not online!")
         end
     else
-        TriggerClientEvent('QBCore:Notify', source,  "You Dont Own This Vehicle", "error")
+        TriggerClientEvent('chatMessage', src, "SYSTEM", "error", "You have no keys to this vehicle!")
     end
 end)
 
-QBCore.Commands.Add("engine", "Toggle Engine", {}, false, function(source, args)
+QBCore.Commands.Add("engine", "Toggle motor on/off", {}, false, function(source, args)
 	TriggerClientEvent('vehiclekeys:client:ToggleEngine', source)
 end)
 
-QBCore.Commands.Add("givecarkeys", "Give Car Keys", {{name = "id", help = "Player id"}}, true, function(source, args)
+QBCore.Commands.Add("givekeys", "Give your vehicle keys", {{name = "id", help = "Player id"}}, true, function(source, args)
 	local src = source
     local target = tonumber(args[1])
     TriggerClientEvent('vehiclekeys:client:GiveKeys', src, target)
 end)
 
-function CheckOwner(plate, identifier)
-    local retval = false
-    if VehicleList then
-        local found = VehicleList[plate]
-        if found then
-            retval = found.owners[identifier] ~= nil and found.owners[identifier]
+function DoesPlateExist(plate)
+    if VehicleList ~= nil then
+        for k, val in pairs(VehicleList) do
+            if val.plate == plate then
+                return true
+            end
         end
     end
+    return false
+end
 
+function CheckOwner(plate, identifier)
+    local retval = false
+    if VehicleList ~= nil then
+        for k, val in pairs(VehicleList) do
+            if val.plate == plate then
+                for key, owner in pairs(VehicleList[k].owners) do
+                    if owner == identifier then
+                        retval = true
+                    end
+                end
+            end
+        end
+    end
     return retval
 end
 
